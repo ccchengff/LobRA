@@ -1,0 +1,26 @@
+include(ExternalProject)
+
+set(BNB_TAR ${CMAKE_SOURCE_DIR}/third_party/bitsandbytes/bitsandbytes.tar.gz)
+set(BNB_SHARED_LIB libbitsandbytes.so)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_party)
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E tar xzf ${BNB_TAR} 
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_party
+)
+
+set(BNB_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/third_party/bitsandbytes)
+set(BNB_INCLUDE_DIR ${BNB_SOURCE}/csrc)
+set(BNB_INSTALL ${BNB_SOURCE}/install)
+set(BNB_LIB_PATH ${BNB_INSTALL}/${BNB_SHARED_LIB})
+# set(BNB_LIB_DIR ${BNB_INSTALL}/lib)
+# set(BNB_DLL_PATH ${BNB_LIB_DIR}/${BNB_SHARED_LIB})
+# set(BNB_CMAKE_EXTRA_ARGS)
+
+ExternalProject_Add(project_bitsandbytes
+  PREFIX bitsandbytes
+  # PATCH_COMMAND ${MKLDNN_PATCH_DISCARD_COMMAND} COMMAND ${BNB_PATCH_COMMAND}
+  SOURCE_DIR ${BNB_SOURCE}
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${BNB_INSTALL} -DCMAKE_INSTALL_LIBDIR=${BNB_INSTALL} -DCMAKE_INSTALL_BINDIR=${BNB_INSTALL}
+)
+link_directories(${BNB_INCLUDE_DIR})

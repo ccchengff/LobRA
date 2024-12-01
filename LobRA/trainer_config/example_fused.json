@@ -1,0 +1,19 @@
+{
+    "variant": "fused",
+    "train_task_num": 1,
+    "task": [
+        {
+            "rank": 16,
+            "lora_alpha": 16,
+            "target_modules": [
+                "qkv_proj", "o_proj", "dense_h_to_4h", "dense_4h_to_h"
+            ],
+            "global_batch_size": 64,
+            "dataset_name": "guanaco/guanaco",
+            "context_length": 8192,
+            "json_key": "text",
+            "steps": 100,
+            "epochs": 1
+        }
+    ]
+}

@@ -1,0 +1,58 @@
+{
+    "variant": "canonical",
+    "train_task_num": 4,
+    "task": [
+        {
+            "rank": 16,
+            "lora_alpha": 16,
+            "target_modules": [
+                "q_proj", "k_proj", "v_proj", "o_proj", "dense_h_to_4h", "dense_4h_to_h"
+            ],
+            "global_batch_size": 128,
+            "dataset_name": "evol_instruct",
+            "context_length": 16384,
+            "json_key": "text",
+            "steps": 101,
+            "epochs": 1
+        },
+        {
+            "rank": 16,
+            "lora_alpha": 16,
+            "target_modules": [
+                "q_proj", "k_proj", "v_proj", "o_proj", "dense_h_to_4h", "dense_4h_to_h"
+            ],
+            "global_batch_size": 128,
+            "dataset_name": "commitpackft",
+            "context_length": 8192,
+            "json_key": "text",
+            "steps": 101,
+            "epochs": 1
+        },
+        {
+            "rank": 16,
+            "lora_alpha": 16,
+            "target_modules": [
+                "q_proj", "k_proj", "v_proj", "o_proj", "dense_h_to_4h", "dense_4h_to_h"
+            ],
+            "global_batch_size": 32,
+            "dataset_name": "billsum",
+            "context_length": 16384,
+            "json_key": "text",
+            "steps": 101,
+            "epochs": 1
+        },
+        {
+            "rank": 16,
+            "lora_alpha": 16,
+            "target_modules": [
+                "q_proj", "k_proj", "v_proj", "o_proj", "dense_h_to_4h", "dense_4h_to_h"
+            ],
+            "global_batch_size": 64,
+            "dataset_name": "PubMedQA",
+            "context_length": 2048,
+            "json_key": "text",
+            "steps": 101,
+            "epochs": 1
+        }
+    ]
+}
