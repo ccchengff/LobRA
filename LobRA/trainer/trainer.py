@@ -830,11 +830,11 @@ class Trainer:
                 'tp': self.tps,
                 'pp': self.pps,
                 'max_tokens': self.max_tokens_list,
-                'total_tokens': total_cnt,
-                'effective_tokens': valid_cnt,
-                'padding_ratio': (total_cnt - valid_cnt) / total_cnt,
-                'run_time': np.min(run_times),
-                'schedule_time': np.min(schedule_times)
+                'gpu_seconds': np.min(run_times) * self.num_gpus,
+                # 'total_tokens': total_cnt,
+                # 'effective_tokens': valid_cnt,
+                # 'padding_ratio': (total_cnt - valid_cnt) / total_cnt,
+                # 'schedule_time': np.min(schedule_times)
             }
             '''
             with open('sensitivity_result.txt', 'a') as f:
@@ -843,7 +843,7 @@ class Trainer:
                 f.write("\n")
             '''
             if os.environ['PROFILE_E2E_COST'] == 'TRUE':
-                write_to_csv(log_entry, f"exp_result/e2e/run_statistics.csv")
+                write_to_csv(log_entry, f"exp_result/expr/result.csv")
             # os.system("rm -rf temp")
             print(f"total_cnt = {total_cnt}, valid_cnt = {valid_cnt}, mean_run_time = {np.min(run_times)}, mean_schedule_time = {np.min(schedule_times)}")
         # print(f"{local_host_name} - {local_device.index}: dp_grad_reduce_time = {np.mean(self.dp_grad_reduce_times)}")

@@ -74,9 +74,22 @@ Fine-tuning with homogeneous & heterogeneous parallel configurations can be laun
 # (under LobRA folder)
 # bash scripts/llama_lora_multi_task.sh <MODEL_SIZE> <TRAIN_TASK_NUM> <CONTEXT_LENGTH_LIST> <DP_LIST> <TP_LIST> <PP_LIST> <BUCKET_NUM> <DP_BUCKET> <MAX_SEQ_LENGTH> <TRAINER_CONFIG_PATH>
 # fine-tuning with homoegeneous parallel configurations
-export DP_BUCKET=TRUE # whether to use dynamic bucketing
+export DP_BUCKET=FALSE # whether to use dynamic bucketing
 bash scripts/llama_lora_multi_task.sh 7B 6 16384 2 8 1 16 16384 exp_task6
 # fine-tuning with heterogeneous parallel configurations (e.g., <1,1> x 6, <2,1> x 1, <8,1> x 1)
 export DP_BUCKET=TRUE
 bash scripts/llama_lora_multi_task.sh 7B 6 2048,4096,16384 6,1,1 1,2,8 1,1,1 16 16384 exp_task6
 ~~~
+
+### 6. Experiments in the Paper
+
+You can reproduce the end-to-end, ablation study and scalability experiments in our paper by running the following scripts.
+
+~~~bash
+# (under LobRA folder)
+bash experiments/expr_7b.sh
+bash experiments/expr_32b.sh
+bash experiments/expr_70b.sh
+~~~
+
+Note that you need to profile the memory and time cost of different parallel configurations before running the experiments. The profiling results will be stored in `exp_result/profile/memory/` and `exp_result/profile/cost_model/`, respectively.
