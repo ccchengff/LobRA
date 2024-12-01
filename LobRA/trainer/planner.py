@@ -232,7 +232,6 @@ class GroupedStaticBatchPlanner:
         return ds_parallel_config
 
 class NewStaticBatchPlanner:
-	# read_csv from 吞吐结果，并对比得到最优策略
     def __init__(
         self,
         cost_model,
@@ -240,7 +239,8 @@ class NewStaticBatchPlanner:
         train_task_num,
         global_batch_size_list,
         gpu_num,
-        strategy_candidates, # TODO: 是否要合并到cost_model？
+        strategy_candidates,
+        use_optimized_strategy_pool=True,
         lp_threads=32
     ):
         self.num_layers = num_layers
@@ -256,15 +256,15 @@ class NewStaticBatchPlanner:
         self.popt, self.profile_seq_lens = cost_model.popt, cost_model.seq_len_range
         self.strategy_pool = self.get_optimized_strategy_pool(strategy_candidates)
         self.strategy_pool_size = len(self.strategy_pool)
+        self.use_optimized_strategy_pool = use_optimized_strategy_pool
     
     def set_global_batch_size(self, global_batch_size, i):
         self.global_batch_size_list[i] = global_batch_size
 
     def get_optimized_strategy_pool(self, strategy_candidates):
-        use_optimized_strategy_pool = True
         goat_strategy_of_max_tokens = {}
         min_gpu_num_strategy_of_max_tokens = {}
-        if not use_optimized_strategy_pool:
+        if not self.use_optimized_strategy_pool:
             strategy_pool = [(strategy['tp'] * strategy['pp'], (strategy['tp'], strategy['pp']), strategy['max_tokens']) for strategy in strategy_candidates if strategy['max_tokens'] > 0]
             print(f"strategy_pool = {strategy_pool}")
             return strategy_pool
@@ -298,7 +298,6 @@ class NewStaticBatchPlanner:
         strategy_pool = set([(goat_strategy[1], goat_strategy[2], max_tokens) for max_tokens, goat_strategy in goat_strategy_of_max_tokens.items()])
         strategy_pool = list(strategy_pool.union(set([(min_gpu_num_strategy[1], min_gpu_num_strategy[2], max_tokens) for max_tokens, min_gpu_num_strategy in min_gpu_num_strategy_of_max_tokens.items()])))
         print(f"strategy_pool = {strategy_pool}")
-        # strategy_pool = [strategy for strategy in strategy_pool if strategy[0] != 16]
         return strategy_pool
 
     def get_mbs_map(self, strategy_pool, task_seq_len_range):

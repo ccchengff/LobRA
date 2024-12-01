@@ -169,7 +169,7 @@ def get_length_cumulative_distribution(data, min_seq_len=256, max_seq_len=8192):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dataset", type=str, default='alpaca/alpaca'
+        "--dataset", type=str, default='alpaca'
     )
     parser.add_argument(
         "--key", type=str, default='text'
@@ -194,5 +194,5 @@ if __name__ == '__main__':
     data = load_dataset(args.dataset, args.key, vocab_file=args.vocab_file,
                         merge_file=args.merge_file, cache_path=args.cache_path,
                         root_folder=args.root_folder, override=args.override)
-    print(f'dataset {args.dataset} seq_len distribution: {get_length_distribution(data)}')
-    print(f'dataset {args.dataset} seq_len cumulative distribution: {get_length_cumulative_distribution(data)}')
+    # print(f'dataset {args.dataset} seq_len distribution: {get_length_distribution(data)}')
+    # print(f'dataset {args.dataset} seq_len cumulative distribution: {get_length_cumulative_distribution(data)}')

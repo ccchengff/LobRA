@@ -38,9 +38,7 @@ print(jdict[0])
 #     return st
 
 for example in jdict:
-    # example['dialogue'] = example['text']
     text = AlpacaInstructTemplate.format(example)
-    # text = form_translation(example['translation'])
     example['text'] = text + example['output']
     datas.append(example)
 

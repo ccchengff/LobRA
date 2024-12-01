@@ -1,22 +1,17 @@
-# NCCL_DEBUG=info
-NUM_LAYERS=${1:-16}
-HIDDEN_SIZE=${2:-4096}
-NUM_HEADS=${3:-32}
-TRAIN_TASK_NUM=${4:-1}
-MAX_TOKENS_LIST=${5:-4096}
-DPS=${6:-2}
-TPS=${7:-2}
-PPS=${8:-2}
-SP=${9:-1}
-MAX_SEQ_LENGTH=${10:-8192}
-MIN_SEQ_LENGTH=${11:-256}
-CONFIG_PATH=${12:-}
-BUCKET_NUM=${13:-16}
-DP_BUCKET=${14:-}
-TRAINER_CONFIG_PATH=${15:-}
-PROFILE_PATH=${16:-}
-VOCAB_FILE=${17:-}
-MERGE_FILE=${18:-}
+MODEL_SIZE=${1:-'7B'}
+TRAIN_TASK_NUM=${2:-6}
+MAX_TOKENS_LIST=${3:-16384}
+DPS=${4:-2}
+TPS=${5:-8}
+PPS=${6:-1}
+BUCKET_NUM=${7:-16}
+MAX_SEQ_LENGTH=${8:-8192}
+CONFIG_PATH=${9:-}
+MIN_SEQ_LENGTH=${10:-256}
+SP=${11:-1}
+PROFILE_PATH=${12:-}
+VOCAB_FILE=${13:-}
+MERGE_FILE=${14:-}
 
 # env
 PATH="/home/pkuhetu/envs/miniconda3/envs/hetu-py/bin:${PATH}"
@@ -32,40 +27,45 @@ export EVENT_TIMING=FALSE
 export BUCKET_GRAD_BUFFER=LAYER
 export GRAD_CONCAT_BUFFER=ON
 export SPLIT_COLLECTIVE_STREAM=OFF
-export DP_BUCKET=${DP_BUCKET}
+
+if [ -z $DP_BUCKET ]; then
+    export DP_BUCKET=TRUE
+fi
 
 export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
 export NCCL_IB_GID_INDEX=3
 
-export HETU_DATA_DISPATCH=BALANCE
+if [ -z $HETU_DATA_DISPATCH ]; then
+    export HETU_DATA_DISPATCH=BALANCE
+fi
 export LORA_SPLIT_METHOD=SPLIT_B2
 
-# export CUDA_DEVICE_MAX_CONNECTIONS=1
-
-# for dp bucket
-if [ $DP_BUCKET = "TRUE" ] || [ $DP_BUCKET = "ITER" ]; then
+if [ $DP_BUCKET = "TRUE" ] || [ $BUCKET_NUM = 16 ]; then
     export HETU_MAX_SPLIT_SIZE_MB=10240
     export HETU_MAX_INTERNAL_FRAGMENT_SIZE_MB=0
 else 
-    export HETU_MAX_SPLIT_SIZE_MB=10240
-    export HETU_MAX_INTERNAL_FRAGMENT_SIZE_MB=0
+    export HETU_MAX_SPLIT_SIZE_MB=200
+    export HETU_MAX_INTERNAL_FRAGMENT_SIZE_MB=20
 fi
 
-FFN_HIDDEN_SIZE=$(($HIDDEN_SIZE * 4))
-if [ $NUM_LAYERS -eq 32 ] && [ $HIDDEN_SIZE -eq 4096 ] && [ $NUM_HEADS -eq 32 ]; then
-    FFN_HIDDEN_SIZE=11008
-    MODEL_SIZE=7B
-elif [ $NUM_LAYERS -eq 40 ] && [ $HIDDEN_SIZE -eq 5120 ] && [ $NUM_HEADS -eq 40 ]; then
-    FFN_HIDDEN_SIZE=13824
-    MODEL_SIZE=13B
-elif [ $NUM_LAYERS -eq 60 ] && [ $HIDDEN_SIZE -eq 6656 ] && [ $NUM_HEADS -eq 64 ]; then
-    FFN_HIDDEN_SIZE=17920
-    MODEL_SIZE=32B
-elif [ $NUM_LAYERS -eq 80 ] && [ $HIDDEN_SIZE -eq 8192 ] && [ $NUM_HEADS -eq 64 ]; then
-    FFN_HIDDEN_SIZE=28672
-    MODEL_SIZE=70B
+if [ "${MODEL_SIZE}" = "7B" ]; then
+    NUM_LAYERS=32
+    HIDDEN_SIZE=4096
+	FFN_HIDDEN_SIZE=11008
+    NUM_HEADS=32
+elif [ "${MODEL_SIZE}" = "32B" ]; then
+    NUM_LAYERS=60
+    HIDDEN_SIZE=6656
+	FFN_HIDDEN_SIZE=17920
+    NUM_HEADS=64
+elif [ "${MODEL_SIZE}" = "70B" ]; then
+    NUM_LAYERS=80
+    HIDDEN_SIZE=8192
+	FFN_HIDDEN_SIZE=28672
+    NUM_HEADS=64
 else
-    MODEL_SIZE=UNKNOWN
+    echo the model should be 7b/32b/70b for test.
+    exit 0
 fi
 
 export HETU_MEMORY_PROFILE=WARN
@@ -167,18 +167,10 @@ fi
 if [ -z $MERGE_FILE ]; then
     MERGE_FILE=${ROOT_FOLDER}/merges.txt
 fi
-if [ -z $TRAINER_CONFIG_PATH ]; then
-    TRAINER_CONFIG_PATH=trainer_config/${CONFIG_PATH}.json
-fi
 if [ -z $PROFILE_PATH ]; then
     PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}_1tasks_sp${SP}.csv
 fi
-# if [ -z $PROFILE_FW_PATH ]; then
-#     PROFILE_FW_PATH=exp_result/profile/cost_model/profile_fw_time_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
-# fi
-# if [ -z $PROFILE_BW_PATH ]; then
-#     PROFILE_BW_PATH=exp_result/profile/cost_model/profile_bw_time_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
-# fi
+TRAINER_CONFIG_PATH=trainer_config/${CONFIG_PATH}.json
 
 if [ $NUM_GPUS -eq 16 ]; then
     mpirun --allow-run-as-root -mca orte_abort_on_non_zero_status 1 -np 16 \

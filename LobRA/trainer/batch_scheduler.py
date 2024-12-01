@@ -253,7 +253,7 @@ def global_batch_scheduler(
         if args.bucket_num == 7:
             buckets = [256, 512, 1024, 2048, 4096, 8192, 16384]
         elif args.bucket_num == 16:
-            buckets = [256, 512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, 12288, 13312, 14336, 16384]
+            buckets = [144, 256, 304, 512, 640, 800, 1024, 1216, 1504, 1888, 2656, 4096, 4256, 5840, 8192, 16384]
         else:
             buckets = [256, 512, 1024, 2048, 4096, 8192, 16384]
         for i, batch_data in enumerate(global_batch):

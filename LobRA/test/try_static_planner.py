@@ -3,13 +3,9 @@ import numpy as np
 import argparse
 import bisect
 import time
-import math
 import copy
 from trainer.build_strategy_planner import build_strategy_planner_cython
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
-from hyperopt import tpe, hp, fmin, Trials, STATUS_OK
-from hyperopt.early_stop import no_progress_loss
 from joblib import Parallel, delayed
 from trainer.dp_bucket import get_buckets_dp
 from trainer.utils.wrapper import DatasetWrapper
@@ -17,13 +13,11 @@ from data_utils import GPTJsonDataset, Encoder
 from model import LLamaConfig
 from profiler import CostModel
 from types import SimpleNamespace
-from trainer.planner import StaticBatchPlanner, NewStaticBatchPlanner, GroupedStaticBatchPlanner
+from trainer.planner import NewStaticBatchPlanner, GroupedStaticBatchPlanner
 from trainer.trainer import TrainerConfig, DatasetContext
 from pyscipopt import Model, quicksum
-from typing import List, Tuple
 
 def compute_estimated_time(args):
-    """并行计算get_estimated_time的结果."""
     optimizer, mbs, seq_len, tp, pp = args
     return optimizer.get_estimated_time(mbs, seq_len, tp, pp)
 
@@ -35,7 +29,7 @@ class FusedStaticBatchPlanner:
         train_task_num,
         global_batch_size_list,
         gpu_num,
-        strategy_candidates, # TODO: 是否要合并到cost_model？
+        strategy_candidates,
         lp_threads=64
     ):
         self.num_layers = num_layers
@@ -60,7 +54,6 @@ class FusedStaticBatchPlanner:
         self.strategy_pool = self.get_optimized_strategy_pool(strategy_candidates)
         self.strategy_pool_size = len(self.strategy_pool)
         
-        # UCB
         self.multi_task_seq_num_distribution = None
         self.seq_distribution_across_tasks = None
         # tokens
@@ -104,22 +97,13 @@ class FusedStaticBatchPlanner:
         strategy_pool = set([(goat_strategy[1], goat_strategy[2], max_tokens) for max_tokens, goat_strategy in goat_strategy_of_max_tokens.items()])
         strategy_pool = list(strategy_pool.union(set([(min_gpu_num_strategy[1], min_gpu_num_strategy[2], max_tokens) for max_tokens, min_gpu_num_strategy in min_gpu_num_strategy_of_max_tokens.items()])))
         print(f"strategy_pool = {strategy_pool}")
-        # strategy_pool = [strategy for strategy in strategy_pool if strategy[0] != 16]
         return strategy_pool
     
     def fit_time(self, X, aux_fragment, tp, c1, c2, c3, c4, c5, c6):
         mbs, seq_len = X
-        # if (seq_len, tp) not in self.cache_fit_times.keys():
-        #     self.cache_fit_times[(seq_len, tp)] = (
-        #         c1 * seq_len * seq_len + c3 * seq_len + c5,
-        #         c2 * seq_len * seq_len + c4 * seq_len + c6
-        #     )
-        #     return self.cache_fit_times[(seq_len, tp)][0] * mbs + self.cache_fit_times[(seq_len, tp)][1] * aux_fragment
-        # return self.cache_fit_times[(seq_len, tp)][0] * mbs + self.cache_fit_times[(seq_len, tp)][1] * aux_fragment
         return (c1 * mbs + c2 * aux_fragment) * seq_len * seq_len + (c3 * mbs + c4 * aux_fragment) * seq_len + (c5 * mbs + c6 * aux_fragment)
     
     def estimate_time(self, mbs, s, tp, pp, aux_fragment=1):
-        # 打印mbs的类型
         return self.fit_time((mbs, s), aux_fragment, tp, *self.popt[tp]) * self.num_layers / pp
 
     def estimate_total_time(self, strategy_idx, m, r, aux_bool_fragment, max_batch_time):
@@ -131,7 +115,6 @@ class FusedStaticBatchPlanner:
                         self.estimate_time(r[i][strategy_idx], seq_len, tp, pp, aux_bool_fragment[i][strategy_idx]) \
                         for i, seq_len in enumerate(self.task_seq_lens)) + (pp - 1) * max_batch_time
     
-    # @lru_cache(maxsize=None)
     def get_estimated_time(self, mbs, s, tp, pp):
         if mbs == 0:
             return 0
@@ -167,48 +150,6 @@ class FusedStaticBatchPlanner:
         estimate_time += (pp - 1) * max_batch_time
         print(f"strategy - {strategy_id}: max_batch_time = {max_batch_time / 1000}s, total_estimate_time = {estimate_time / 1000} s")
         return estimate_time
-
-    def get_estimate_total_time_parallel(self, tp, pp, multi_task_batch_dispatch_map, strategy_id):
-        max_tokens = self.max_tokens_list[strategy_id]
-        seq_len_map = {
-            seq_len: np.sum([
-                multi_task_batch_dispatch_map[task][strategy_id][seq_len] 
-                for task in range(self.train_task_num)
-            ])
-            for seq_len in self.task_seq_lens
-        }
-
-        estimate_time = 0
-        max_batch_time = 0
-
-        tasks = []
-        with ThreadPoolExecutor() as executor:
-            for seq_len in self.task_seq_lens:
-                mbs = max_tokens // seq_len
-                if mbs == 0:
-                    m = 0
-                else:
-                    m = (seq_len_map[seq_len] + self.dps[strategy_id] - 1) // self.dps[strategy_id] // mbs
-                rest_sample_num = seq_len_map[seq_len] // self.dps[strategy_id] - mbs * m
-                
-                tasks.extend([
-                    (self, mbs, seq_len, tp, pp),
-                    (self, rest_sample_num, seq_len, tp, pp)
-                ])
-
-            results = list(executor.map(compute_estimated_time, tasks))
-
-        # 整理并累加结果
-        for i, seq_len in enumerate(self.task_seq_lens):
-            full_time = results[i * 2]
-            piece_time = results[i * 2 + 1]
-
-            estimate_time += full_time * m + piece_time
-            cur_max_time = full_time if m > 0 else piece_time
-            max_batch_time = max(max_batch_time, cur_max_time)
-
-        estimate_time += (pp - 1) * max_batch_time
-        return estimate_time
     
     def get_estimate_total_time(self, tp, pp, multi_task_batch_dispatch_map, strategy_id):
         # print(f"multi = {multi_task_batch_dispatch_map}")
@@ -237,7 +178,6 @@ class FusedStaticBatchPlanner:
     def build_strategy_planner(self):
         target = self.gpu_num
         n = self.strategy_pool_size
-        # dp[i][j]表示前i个策略，使用j个gpu的方案数
         dp = [0] * (target + 1)
         dp[0] = 1
         
@@ -607,7 +547,7 @@ class FusedStaticBatchPlanner:
         combine_num, combine_dps = build_strategy_planner_cython(self.gpu_num, self.strategy_pool_size, gpu_num_of_strategy_pool)
         # ee_time = time.time()
         # print(f"build strategy planner takes {ee_time - ss_time:.2f}s", flush=True)
-        print(f"combine_num = {combine_num}")
+        # print(f"combine_num = {combine_num}")
         strategy_combination = []
         for i in range(len(combine_dps)):
             strategy_combination.append({})
@@ -624,7 +564,7 @@ class FusedStaticBatchPlanner:
                 strategy_combination[i] = {}
         # 删除空的strategy_combination
         strategy_combination = [strategy for strategy in strategy_combination if len(strategy) > 0]
-        print(f"strategy_combination = {len(strategy_combination)}")
+        # print(f"strategy_combination = {len(strategy_combination)}")
         # '''
         def get_lower_bound_from_group_planner(strategy):
             # 策略配置
@@ -653,9 +593,6 @@ class FusedStaticBatchPlanner:
                 seq2strategy[s] = sorted_max_tokens_idxs[strategy_idx]
             
             # print(f"seq2strategy = {seq2strategy}")
-            # 1. 按 group planner 的方式分配序列
-            # 2. 计算每个 pipeline 的 cost
-            # 3. 返回所有 pipeline 的 cost 均值
             multi_task_batch_dispatch_map = {task_id : [{s : self.multi_task_seq_num_distribution[task_id][s] if seq2strategy[s] == i else 0 for s in self.task_seq_lens} for i in range(len(strategy_idxs))] for task_id in range(self.train_task_num)}
             # print(f"multi_task_batch_dispatch_map = {multi_task_batch_dispatch_map}")
             cu_estimate_time = 0
@@ -676,7 +613,6 @@ class FusedStaticBatchPlanner:
         no_repetitive_strategy_combination_cost = []
         for strategy in strategy_combination:
             strategy_cost = get_lower_bound_from_group_planner(strategy)
-            # 如果strategy的max_tokens_list有重复元素，则直接跳过
             if len(set([self.strategy_pool[i][2] for i in strategy.keys()])) == len(strategy.keys()):
                 no_repetitive_strategy_combination_cost.append(strategy_cost)
             estimate_cost.append(strategy_cost)
@@ -699,7 +635,7 @@ class FusedStaticBatchPlanner:
             if cost - min_cost > 0.15 * min_cost:
                 continue
             pruned_strategy_combination.append(strategy)
-        print(f"before: {len(estimate_cost)}, after: {len(pruned_strategy_combination)}")
+        # print(f"before: {len(estimate_cost)}, after: {len(pruned_strategy_combination)}")
         if len(pruned_strategy_combination) < min_candidate_num:
             sorted_estimate_cost_idx = np.argsort(estimate_cost)
             sorted_estimate_cost_idx = sorted_estimate_cost_idx[:min_candidate_num]
@@ -747,84 +683,6 @@ class FusedStaticBatchPlanner:
                 cost_list.append(1e8)
                 return 1e8, None
             model_status = model.getStatus()
-            '''
-            seq_len_num_map_list = []
-            for i in range(self.strategy_num):
-                seq_len_num_map = {s : 0 for s in self.task_seq_lens}
-                for v in model.getVars():
-                    for seq_len in self.task_seq_lens:
-                        n_name = "seq_num(%s, strategy%s)" % (seq_len, i)
-                        if n_name in v.name:
-                            n_val = round(model.getVal(v))
-                            if n_val < 1:
-                                continue
-                            # seq_len_num_map[seq_len] = n_val * self.dps[i]
-                            seq_len_num_map[seq_len] = n_val
-                seq_len_num_map_list.append(seq_len_num_map)
-            for seq_len in self.task_seq_lens:
-                total_seq_num = seq_distribution_across_tasks[seq_len]
-                dispatched_seq_num = 0
-                for i in range(self.strategy_num):
-                    dispatched_seq_num += seq_len_num_map_list[i][seq_len]
-                if dispatched_seq_num > total_seq_num:
-                    dp_strategy = sorted([i for i in range(self.strategy_num) if self.dps[i] > 1 and seq_len_num_map_list[i][seq_len] > 0],
-                                        key=lambda x: self.dps[x], reverse=True)
-                    overflow_seq_num = dispatched_seq_num - total_seq_num
-                    max_overflow_seq_num = np.sum([self.dps[i] - 1 for i in dp_strategy])
-                    if overflow_seq_num > max_overflow_seq_num:
-                        non_dp_strategy = sorted([i for i in range(self.strategy_num) if self.dps[i] == 1 and seq_len_num_map_list[i][seq_len] > 0],
-                                                key=lambda x: seq_len_num_map_list[x][seq_len], reverse=True)
-                        total_overflow_num = overflow_seq_num - max_overflow_seq_num
-                        # avg_overflow_num = total_overflow_num // len(non_dp_strategy)
-                        for i in non_dp_strategy:
-                            if total_overflow_num == 0:
-                                break
-                            tune_num = min(seq_len_num_map_list[i][seq_len], total_overflow_num)
-                            seq_len_num_map_list[i][seq_len] -= tune_num
-                            total_overflow_num -= tune_num
-                        # if total_overflow_num > 0:
-                        #     for i in non_dp_strategy:
-                        #         if total_overflow_num == 0:
-                        #             break
-                        #         tune_num = min(seq_len_num_map_list[i][seq_len], total_overflow_num)
-                        #         seq_len_num_map_list[i][seq_len] -= tune_num
-                        #         total_overflow_num -= tune_num
-                        # assert total_overflow_num == 0
-                        overflow_seq_num = max_overflow_seq_num
-                    # assert overflow_seq_num <= max_overflow_seq_num, \
-                    #     f"overflow seq num is larger than the limit for seq_len = {seq_len} where limit = {max_overflow_seq_num}"
-                    for i in dp_strategy:
-                        if overflow_seq_num == 0:
-                            break
-                        seq_len_num_map_list[i][seq_len] -= min(self.dps[i] - 1, overflow_seq_num)
-                        overflow_seq_num -= min(self.dps[i] - 1, overflow_seq_num)
-            # print(f"[DEBUG] after tune: seq_len_num_map_list = {seq_len_num_map_list}")
-            # print(f"multi_task_seq_num_distribution = {multi_task_seq_num_distribution_copy}")
-
-            # dispatch task-specific samples
-            multi_task_batch_dispatch_map = {task_id : [{s : 0 for s in self.task_seq_lens} for _ in range(self.strategy_num)] for task_id in range(self.train_task_num)}
-            for seq_idx, seq_len in enumerate(self.task_seq_lens):
-                for task_id in range(self.train_task_num):
-                    for i in range(self.strategy_num):
-                        dispatch_num = min(seq_len_num_map_list[i].get(seq_len, 0), multi_task_seq_num_distribution_copy[task_id].get(seq_len, 0))
-                        if dispatch_num == 0:
-                            continue
-                        multi_task_batch_dispatch_map[task_id][i][seq_len] += int(dispatch_num)
-                        seq_len_num_map_list[i][seq_len] -= dispatch_num
-                        multi_task_seq_num_distribution_copy[task_id][seq_len] -= dispatch_num
-                    if multi_task_seq_num_distribution_copy[task_id].get(seq_len, 0) > 0:
-                        assert seq_idx < len(self.task_seq_lens) - 1
-                        if self.task_seq_lens[seq_idx + 1] not in multi_task_seq_num_distribution_copy[task_id].keys():
-                            multi_task_seq_num_distribution_copy[task_id][self.task_seq_lens[seq_idx + 1]] = 0
-                        multi_task_seq_num_distribution_copy[task_id][self.task_seq_lens[seq_idx + 1]] += multi_task_seq_num_distribution_copy[task_id][seq_len]
-            # print(f"multi_task_batch_dispatch_map = {multi_task_batch_dispatch_map}")
-            
-            # profile
-            cost_time = 0
-            # print(f"strategy num = {self.strategy_num}")
-            for i in range(self.strategy_num):
-                cost_time = max(cost_time, self.get_estimate_total_time(self.tps[i], self.pps[i], multi_task_batch_dispatch_map, i))
-            '''
             dps, tps, pps, max_tokens_list = [], [], [], []
             for strategy_idx in strategy.keys():
                 dp = strategy[strategy_idx]
@@ -858,6 +716,7 @@ class FusedStaticBatchPlanner:
                 max_tokens = strategy[2]
                 print(f"strategy - {strategy_idx}: dp = {dp}, tp = {tp}, pp = {pp}, max_tokens = {max_tokens}")
             print(f"====================")
+        '''
         # 对cost_list排序，找到前k个最小cost对应的策略组合
         k = min(5, len(results))
         for i in range(k):
@@ -876,9 +735,8 @@ class FusedStaticBatchPlanner:
                 max_tokens = strategy[2]
                 print(f"strategy - {strategy_idx}: dp = {dp}, tp = {tp}, pp = {pp}, max_tokens = {max_tokens}")
             print(f"====================")
-                
-        
-        # 找到最小cost的策略组合
+        '''
+
         min_cost_idx = cost_idxs[0]
         multi_strategy = results[min_cost_idx][1]
         if os.environ.get("BUCKET_PLAN") == "PROFILE":
@@ -892,21 +750,6 @@ class FusedStaticBatchPlanner:
                 f.write(f"{results[min_cost_idx][0]}\n")
                 f.write(f"{e_time - s_time:.3f}\n")
                 f.write("\n")
-        else:
-            pass
-            '''
-            with open('sensitivity_strategy.txt', 'a') as f:
-                f.write(f"bucket num {args.bucket_num}:\n")
-                for strategy_idx in multi_strategy.keys():
-                    strategy = self.strategy_pool[strategy_idx]
-                    dp = multi_strategy[strategy_idx]
-                    tp, pp = strategy[1]
-                    max_tokens = strategy[2]
-                    # print(f"strategy - {strategy_idx}: dp = {dp}, tp = {tp}, pp = {pp}, max_tokens = {max_tokens}")
-                    f.write(f"dp = {dp}, tp = {tp}, pp = {pp}, max_tokens = {max_tokens}\n")
-                f.write("\n")
-            '''
-
         return multi_strategy, e_time - s_time
 
     def get_lower_bound_from_group_planner(self, strategy_id, strategy):
@@ -931,9 +774,6 @@ class FusedStaticBatchPlanner:
                 strategy_idx += 1
             seq2strategy[s] = sorted_max_tokens_idxs[strategy_idx]
         # print(f"seq2strategy = {seq2strategy}")
-        # 1. 按 group planner 的方式分配序列
-        # 2. 计算每个 pipeline 的 cost
-        # 3. 返回所有 pipeline 的 cost 均值
         multi_task_batch_dispatch_map = {task_id : [{s : self.multi_task_seq_num_distribution[task_id][s] if seq2strategy[s] == i else 0 for s in self.task_seq_lens} for i in range(len(strategy_idxs))] for task_id in range(self.train_task_num)}
         # print(f"multi_task_batch_dispatch_map = {multi_task_batch_dispatch_map}")
         cu_estimate_time = 0
@@ -943,87 +783,6 @@ class FusedStaticBatchPlanner:
             cu_estimate_time += estimate_time * tps_list[strategy_idx] * pps_list[strategy_idx] * dps_list[strategy_idx]
             gpu_num += tps_list[strategy_idx] * pps_list[strategy_idx] * dps_list[strategy_idx]
         return strategy_id, cu_estimate_time / gpu_num / 1000
-
-    def solve(self, multi_task_seq_distribution):
-        # 1. 分析序列分布 [preprocess]
-        task_seq_len_range = set()
-        for i in range(self.train_task_num):
-            task_seq_len_range = task_seq_len_range.union(set(multi_task_seq_distribution[i].keys()))
-        # assert task_seq_len_range.issubset(set(self.profile_seq_lens))
-        self.task_seq_lens = sorted(list(task_seq_len_range))
-        max_seq_len = max(self.task_seq_lens)
-        max_seq_len_to_2 = 2 ** int(np.ceil(np.log2(max_seq_len)))
-        
-        # 2. 序列分配 [preprocess]
-        seq_distribution_across_tasks = {s : 0 for s in self.task_seq_lens}
-        global_batch_size_across_tasks = 0
-        multi_task_seq_num_distribution = {task_id: {seq_len : 0 for seq_len in self.task_seq_lens} for task_id in range(self.train_task_num)}
-        max_seq_len = max(self.task_seq_lens)
-        for i, task_seq_distribution in enumerate(multi_task_seq_distribution):
-            # print(f"task {i}: {task_seq_distribution}")
-            for seq_len, p in task_seq_distribution.items():
-                # seq_num = math.ceil(p * self.global_batch_size_list[i])
-                # seq_num = math.ceil(seq_num) if seq_num < 1 and seq_num > 0 else round(seq_num)
-                seq_num = round(p * self.global_batch_size_list[i])
-                multi_task_seq_num_distribution[i][seq_len] = seq_num
-                seq_distribution_across_tasks[seq_len] += seq_num
-                global_batch_size_across_tasks += seq_num
-        seq_distribution_across_tasks = {s : num for s, num in seq_distribution_across_tasks.items()}
-        if seq_distribution_across_tasks[max_seq_len] == 0:
-            seq_distribution_across_tasks[max_seq_len] = 1
-            global_batch_size_across_tasks += 1
-            for i, task_seq_distribution in enumerate(multi_task_seq_distribution):
-                if max_seq_len in task_seq_distribution.keys():
-                    # print(f"{i}: {task_seq_distribution[max_seq_len]}")
-                    num = task_seq_distribution[max_seq_len] * self.global_batch_size_list[i]
-                    if num > 0:
-                        multi_task_seq_num_distribution[i][max_seq_len] = 1
-                        break
-        # 将部分未来用到的结果存到self中
-        self.multi_task_seq_num_distribution = multi_task_seq_num_distribution
-        self.seq_distribution_across_tasks = seq_distribution_across_tasks
-        
-        # 3. 构建策略组合 [preprocess]
-        combine_num, combine_dps = self.build_strategy_planner()
-        # print(f"max_seq_len = {max_seq_len}, max_seq_len_to_2 = {max_seq_len_to_2}")
-        # print(f"combine_num = {combine_num}")
-        strategy_combination = []
-        for i in range(len(combine_dps)):
-            strategy_combination.append({})
-            for j in range(len(combine_dps[i])):
-                if combine_dps[i][j] not in strategy_combination[i].keys():
-                    strategy_combination[i][combine_dps[i][j]] = combine_dps[i].count(combine_dps[i][j])
-            max_tokens = 0
-            for sid in strategy_combination[i].keys():
-                max_tokens = max(max_tokens, self.strategy_pool[sid][2])
-            if max_tokens != max_seq_len_to_2:
-                strategy_combination[i] = {}
-        # 删除空的strategy_combination
-        strategy_combination = [strategy for strategy in strategy_combination if len(strategy) > 0]
-        combine_num = len(strategy_combination)
-        print(f"strategy_combination = {combine_num}")
-        
-        # 4. 调用UCB策略选择
-        # best_strategy, best_cost = self.multi_armed_bandit_ucb(combine_num, strategy_combination, self.dynamic_schedule)
-        # best_strategy, best_cost = self.tpe_with_parallel_M(combine_num, strategy_combination, self.dynamic_schedule)
-        best_strategy_id, best_strategy, best_cost = self.bayes_optimization(combine_num, strategy_combination, self.stop_and_resume_schedule)
-        # best_strategy, best_cost = self.adaptive_optimization(combine_num, strategy_combination, self.stop_and_resume_schedule)
-        # best_strategy, best_cost = self.global_optimization(combine_num, strategy_combination, self.dynamic_schedule)
-        
-        # [extra] 计算 cost 下界
-        _, lower_bound_of_best_strategy = self.get_lower_bound_from_group_planner(best_strategy_id, best_strategy)
-        
-        # 5. 打印最优策略
-        print(f"====================")
-        print(f"best_cost: {best_cost}, lower_bound: {lower_bound_of_best_strategy}")
-        for strategy_idx in best_strategy.keys():
-            strategy = self.strategy_pool[strategy_idx]
-            dp = best_strategy[strategy_idx]
-            tp, pp = strategy[1]
-            max_tokens = strategy[2]
-            print(f"strategy - {strategy_idx}: dp = {dp}, tp = {tp}, pp = {pp}, max_tokens = {max_tokens}")
-        print(f"====================")
-        return best_strategy, best_cost
     
 def dispatch_into_buckets(seq_len_num_distribution, buckets):
     remap_seq_len_num_distribution = {}
@@ -1058,8 +817,8 @@ def test_static_planner(args):
         static_batch_planner = FusedStaticBatchPlanner(cost_model, args.num_layers, trainer_config.train_task_num,
                                                        global_batch_size_list, args.num_gpus, strategy_candidates)
     else:
-        static_batch_planner = StaticBatchPlanner(cost_model, args.num_layers, trainer_config.train_task_num,
-                                                  global_batch_size_list, args.num_gpus)
+        print(f"Invalid data dispatch pattern: {data_dispatch_pattern}")
+        return
     dataset_ctxs = []
     seq_len_distribution_list = []
     if os.environ.get('CUSTOM_DISTRIBUTION') == 'TRUE':
@@ -1149,17 +908,18 @@ def test_static_planner(args):
                 seq_len_distribution_list.append(fine_grained_seq_len_distribution)
         elif os.environ.get("BUCKET_PLAN") == "PROFILE":
             pass
-        else:
+        elif os.environ.get("BUCKET_PLAN") == "STATIC":
             if bucket_limit == 7:
                 dp_buckets = [256, 512, 1024, 2048, 4096, 8192, 16384] # 7 bucket
             elif bucket_limit == 16:
                 dp_buckets = [256, 512, 768, 1024, 1536, 2048, 2560, 3072, 3584, 4096, 5120, 6144, 7168, 8192, 12288, 16384] # 16 buckets
-            # dp_buckets = [256, 512, 768, 1024, 1536, 2048, 2560, 3072, 3584, 4096, 5120, 6144, 7168, 8192, 10240, 12288, 14336, 16384] # 18 buckets
-            # dp_buckets = [256, 512, 768, 1024, 1536, 2048, 2560, 3072, 3584, 4096, 5120, 6144, 7168, 8192, 12288, 16384] # 16 buckets
             for i in range(trainer_config.train_task_num):
                 train_dataset = dataset_ctxs[i].dataset
                 seq_len_distribution = train_dataset.get_length_distribution(args.min_seq_length, args.max_seq_length, dp_buckets)
                 seq_len_distribution_list.append(seq_len_distribution)
+        else:
+            print("Invalid bucket plan")
+            return
 
     if os.environ.get("BUCKET_PLAN") == "PROFILE":
         with open("effectiveness.txt", 'r') as f:
@@ -1167,18 +927,13 @@ def test_static_planner(args):
             for i in range(0, len(lines), 4):
                 seq_len_distribution_list = []
                 seq_len_distribution = eval(lines[i])
-                # print(f"seq_len_distribution = {seq_len_distribution}")
                 for v in seq_len_distribution.values():
                     seq_len_distribution_list.append(v)
-                print(seq_len_distribution_list)
                 with open('effectiveness_static.txt', 'a') as ff:
                     ff.write(f'step: {i // 4}\n')
                 static_batch_planner.parallel_schedule(seq_len_distribution_list)
     else:
-        # print(seq_len_distribution_list)
-        # static_batch_planner.schedule(seq_len_distribution_list)
         static_batch_planner.parallel_schedule(seq_len_distribution_list)
-        # static_batch_planner.solve(seq_len_distribution_list)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

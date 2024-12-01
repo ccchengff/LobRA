@@ -55,15 +55,9 @@ def run_benchmark_gpt(profile_args, seq_len_range, profile_mbs, profile_path):
         for mbs in profile_mbs:
             print(f"profiling: (tp, seq_len, mbs) = ({profile_args.tp}, {seq_len}, {mbs})")
             profiler.profile(mbs, seq_len)
-            # 记录前向和反向时间，以及验证用的总时间
             if local_device.index == 0:
                 total_stream_time = profiler.total_stream_time
-                # fw_run_time = profiler.fw_run_time
-                # bw_run_time = profiler.bw_run_time
                 block_time = profiler.block_stream_time
-                # total_stream_time.remove(max(total_stream_time))
-                # fw_run_time.remove(max(fw_run_time))
-                # bw_run_time.remove(max(bw_run_time))
                 total_time_entry = {
                     'tp': profile_args.tp,
                     'seq_len': seq_len,
@@ -76,28 +70,8 @@ def run_benchmark_gpt(profile_args, seq_len_range, profile_mbs, profile_path):
                     'mbs': mbs,
                     'time': np.mean(block_time)    
                 }
-                # fw_time_entry = {
-                #     'tp': profile_args.tp,
-                #     'seq_len': seq_len,
-                #     'mbs': mbs,
-                #     'hidden_size': profile_args.hidden_size,
-                #     'num_heads': profile_args.num_attention_heads,
-                #     'train_task_num': profile_args.train_task_num,
-                #     'time': np.mean(fw_run_time)
-                # }
-                # bw_time_entry = {
-                #     'tp': profile_args.tp,
-                #     'seq_len': seq_len,
-                #     'mbs': mbs,
-                #     'hidden_size': profile_args.hidden_size,
-                #     'num_heads': profile_args.num_attention_heads,
-                #     'train_task_num': profile_args.train_task_num,
-                #     'time': np.mean(bw_run_time)
-                # }
                 if profile_args.num_layers <= 3:
                     write_to_csv(block_time_entry, profile_path)
-                    # write_to_csv(fw_time_entry, profile_fw_path)
-                    # write_to_csv(bw_time_entry, profile_bw_path)
                 else:
                     write_to_csv(total_time_entry, profile_args.validation_path)
 
@@ -159,11 +133,8 @@ def run_benchmark_llama(profile_args, seq_len_range, profile_mbs, profile_path):
                 continue
             print(f"profiling: (tp, seq_len, mbs) = ({profile_args.tp}, {seq_len}, {mbs})")
             profiler.profile(mbs, seq_len)
-            # 记录前向和反向时间，以及验证用的总时间
             if local_device.index == 0:
                 total_stream_time = profiler.total_stream_time
-                # fw_run_time = profiler.fw_run_time
-                # bw_run_time = profiler.bw_run_time
                 block_time = profiler.block_time
                 total_time_entry = {
                     'tp': profile_args.tp,
@@ -177,22 +148,8 @@ def run_benchmark_llama(profile_args, seq_len_range, profile_mbs, profile_path):
                     'mbs': mbs,
                     'time': np.mean(block_time)    
                 }
-                # fw_time_entry = {
-                #     'tp': profile_args.tp,
-                #     'seq_len': seq_len,
-                #     'mbs': mbs,
-                #     'time': np.mean(fw_run_time)
-                # }
-                # bw_time_entry = {
-                #     'tp': profile_args.tp,
-                #     'seq_len': seq_len,
-                #     'mbs': mbs,
-                #     'time': np.mean(bw_run_time)
-                # }
                 if profile_args.num_layers <= 3:
                     write_to_csv(block_time_entry, profile_path)
-                    # write_to_csv(fw_time_entry, profile_fw_path)
-                    # write_to_csv(bw_time_entry, profile_bw_path)
                 else:
                     write_to_csv(total_time_entry, profile_args.validation_path)
 
@@ -256,12 +213,6 @@ if __name__ == '__main__':
     parser.add_argument(
         "--profile_path", type=str, default='', help="profile path of profiler."
     )
-    # parser.add_argument(
-    #     "--profile_fw_path", type=str, default='', help="profile fw path of profiler."
-    # )
-    # parser.add_argument(
-    #     "--profile_bw_path", type=str, default='', help="profile bw path of profiler."
-    # )
     parser.add_argument(
         "--profile_memory_path", type=str, default='', help="profile memory path of profiler."
     )
@@ -281,8 +232,7 @@ if __name__ == '__main__':
     profile_args = argparse.Namespace(**profile_args_dict)
     if profile_args.profile_mbs == '':
         if profile_args.num_layers <= 3:
-            # profile_mbs = [1, 2, 4, 8, 16]
-            profile_mbs = [1]
+            profile_mbs = [1, 2, 4, 8, 16]
         else:
             profile_mbs = [1, 2, 4, 8, 16]
     else:
@@ -299,10 +249,7 @@ if __name__ == '__main__':
             if ds_config[0] == profile_args.tp:
                 max_tokens = max(max_tokens, tokens)
         seq_len_range = [seq_len for seq_len in seq_len_range if seq_len <= max_tokens]
-    # seq_len_range = [256, 512, 1024, 2048, 4096, 8192, 16384]
-    seq_len_range = [512]
-    # if len(seq_len_range) == 0:
-    #     exit(0)
+    seq_len_range = [256, 512, 1024, 2048, 4096, 8192, 16384]
     distributed_init(profile_args.use_two_node)
     if profile_args.model_type == 'gpt':
         run_benchmark_gpt(profile_args, seq_len_range, profile_mbs, profile_args.profile_path)

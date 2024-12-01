@@ -12,10 +12,14 @@ def run_profile(
     seq_len
 ):
     num_micro_batches = pp * 2
+    if tp * pp <= args.num_gpus_limit // 2:
+        dp = 2
+    else:
+        dp = 1
     cmd = f"bash scripts/run_benchmark.sh \
             {args.num_layers} {args.hidden_size} {args.num_attention_heads} {args.train_task_num} \
             {seq_len} 1 {num_micro_batches} \
-            1 {tp} {pp} {sp} \
+            {dp} {tp} {pp} {sp} \
             null {args.trainer_config_path} profile_memory"
     try:
         subprocess.run(cmd, shell=True, check=True)
@@ -82,7 +86,7 @@ if __name__ == "__main__":
         "--pp", type=int, default=1, help="pp degree"
     )
     parser.add_argument(
-        "--sp", type=int, default=0, help="sp option"
+        "--sp", type=int, default=1, help="sp option"
     )
     parser.add_argument(
         "--hidden_size", type=int, default=768, help="Hidden size of transformer model",
@@ -107,7 +111,7 @@ if __name__ == "__main__":
         "--num_layers", type=int, default=2, help="num layers"
     )
     parser.add_argument(
-        "--seq_len_range", type=str, default='', help="seq length range"
+        "--seq_len_limit", type=str, default='', help="seq length limit"
     )
     parser.add_argument(
         "--num_micro_batches", type=int, default=16, help="num micro batches"
@@ -116,7 +120,5 @@ if __name__ == "__main__":
         "--num_gpus_limit", type=int, default=-1, help="num gpus limit"
     )
     args = parser.parse_args()
-    # seq_len_range = list(map(int, args.seq_len_range.split(',')))
-    # seq_len_range = [2048, 4096, 8192, 16384]
-    seq_len_range = [8192, 16384]
-    profile_max_tokens(args, seq_len_range)
+    candidate_seq_len_range = [1024, 2048, 4096, 8192, 16384]
+    profile_max_tokens(args, candidate_seq_len_range)
