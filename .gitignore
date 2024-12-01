@@ -1,6 +1,6 @@
 *.pyc
 *.csv
-*.tar.gz*
+.tar.gz
 *.pkl.gz
 .dataset
 build/
