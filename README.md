@@ -1,6 +1,6 @@
 # LobRA
 
-Codes for our submission entitled *LobRA: Multi-tenant Fine-tuning over Heterogeneous Data*. We prepared scripts to run the workflow of profiling, deployment planning and training with homogeneous & heterogeneous parallel configurations on top of DL system `Hetu`.
+Codes for our submission entitled *LobRA: Multi-tenant Fine-tuning over Heterogeneous Data*. We prepared scripts to run the workflow of profiling, deployment planning and training with homogeneous & heterogeneous parallel configurations on top of DL system `Hetu`. **PLEASE NOTE THAT** the appendix of our paper is available in this repository under the filename `Appendix_of_LobRA.pdf`.
 
 ### 1. Build & Compile Hetu
 
