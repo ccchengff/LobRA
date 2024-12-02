@@ -21,8 +21,8 @@ fi
 export LORA_SPLIT_METHOD=SPLIT_B2
 
 TRAINER_CONFIG_PATH=trainer_config/example_fused.json
-MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp1.csv
-SAVE_PATH=exp_result/performance_align/lora_split_${LORA_SPLIT_METHOD}/performance_align_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp1.csv
+MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
+SAVE_PATH=exp_result/performance_align/lora_split_${LORA_SPLIT_METHOD}/performance_align_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
 RAW_PATH=$SAVE_PATH.raw
 GLOBAL_BATCH_SIZE=64
 

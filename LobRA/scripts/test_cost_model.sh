@@ -49,7 +49,7 @@ if [ -z $TRAINER_CONFIG_PATH ]; then
 fi
 
 SAVE_PATH="exp_result/cost_model/test_cost_model_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv"
-PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}.csv
 
 export HETU_MEMORY_PROFILE=WARN
 # export HETU_MEMORY_LOG_FILE="memory_logs/${EXP_NAME}/memory_profile_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_${DP}_${TP}_${PP}_${SP}_${MICRO_BATCH_SIZE}_${SEQ_LEN}_${NUM_MICRO_BATCHES}"

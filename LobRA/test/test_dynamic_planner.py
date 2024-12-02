@@ -4,9 +4,9 @@ from model import LLamaConfig
 from profiler.cost_model import CostModel
 from trainer.planner import NewDynamicBatchPlanner, GroupedDynamicBatchPlanner
 
-trainer_config_path = "trainer_config/task4.json"
-profile_path = "exp_result/profile/cost_model/profile_time_llama_7B_4tasks_sp1.csv"
-max_tokens_path = "exp_result/profile/memory/max_tokens_llama_7B_4tasks_sp1.csv"
+trainer_config_path = "trainer_config/exp_task6.json"
+profile_path = "exp_result/profile/cost_model/profile_time_llama_7B.csv"
+max_tokens_path = "exp_result/profile/memory/max_tokens_llama_7B_6tasks.csv"
 num_strategy = 3
 gbs = 64
 max_tokens_list = [2048, 4096, 8192]

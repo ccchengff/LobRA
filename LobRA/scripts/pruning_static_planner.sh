@@ -4,8 +4,7 @@ TRAIN_TASK_NUM=${3:-6}
 BUCKET_NUM=${4:-16}
 MAX_SEQ_LENGTH=${5:-16384}
 CONFIG_PATH=${6:-'exp_task6'}
-SP=${7:-1}
-MODEL_TYPE=${8:-llama}
+MODEL_TYPE=${7:-llama}
 
 if [ "${MODEL_SIZE}" = "7B" ]; then
     NUM_LAYERS=32
@@ -37,8 +36,8 @@ ROOT_FOLDER=data
 VOCAB_FILE=${ROOT_FOLDER}/vocab.json
 MERGE_FILE=${ROOT_FOLDER}/merges.txt
 TRAINER_CONFIG_PATH=trainer_config/${CONFIG_PATH}.json
-PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}_1tasks_sp${SP}.csv
-MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}.csv
+MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
 
 python3 test/try_static_planner.py \
 --trainer_config_path $TRAINER_CONFIG_PATH \
@@ -51,7 +50,7 @@ python3 test/try_static_planner.py \
 --ffn_hidden_size $FFN_HIDDEN_SIZE \
 --num_layers $NUM_LAYERS \
 --num_attention_heads $NUM_HEADS \
---sp $SP \
+--sp 1 \
 --model_type $MODEL_TYPE \
 --max_seq_length $MAX_SEQ_LENGTH \
 --min_seq_length 256 \

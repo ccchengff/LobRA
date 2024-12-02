@@ -8,10 +8,9 @@ BUCKET_NUM=${7:-16}
 MAX_SEQ_LENGTH=${8:-8192}
 CONFIG_PATH=${9:-}
 MIN_SEQ_LENGTH=${10:-256}
-SP=${11:-1}
-PROFILE_PATH=${12:-}
-VOCAB_FILE=${13:-}
-MERGE_FILE=${14:-}
+PROFILE_PATH=${11:-}
+VOCAB_FILE=${12:-}
+MERGE_FILE=${13:-}
 
 # env
 PATH="/home/pkuhetu/envs/miniconda3/envs/hetu-py/bin:${PATH}"
@@ -116,6 +115,7 @@ PPS="${pps[*]}"
 unset IFS
 fi
 
+SP=1
 SPS=""
 for i in $(seq 0 $(( ${#dps[@]} - 1 ))); do
     if [ $i -eq 0 ]; then
@@ -168,7 +168,7 @@ if [ -z $MERGE_FILE ]; then
     MERGE_FILE=${ROOT_FOLDER}/merges.txt
 fi
 if [ -z $PROFILE_PATH ]; then
-    PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}_1tasks_sp${SP}.csv
+    PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}.csv
 fi
 TRAINER_CONFIG_PATH=trainer_config/${CONFIG_PATH}.json
 

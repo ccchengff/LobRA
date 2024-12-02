@@ -50,8 +50,8 @@ ROOT_FOLDER=data
 VOCAB_FILE=${ROOT_FOLDER}/vocab.json
 MERGE_FILE=${ROOT_FOLDER}/merges.txt
 TRAINER_CONFIG_PATH=trainer_config/${CONFIG_PATH}.json
-PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}_1tasks_sp${SP}.csv
-MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+PROFILE_PATH=exp_result/profile/cost_model/profile_time_llama_${MODEL_SIZE}.csv
+MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
 
 python3 test/test_static_planner.py \
 --trainer_config_path $TRAINER_CONFIG_PATH \

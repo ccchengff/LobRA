@@ -2,8 +2,7 @@
 MODEL_SIZE=${1:-'7B'}
 TPS=${2:-2}
 TRAIN_TASK_NUM=${3:-1}
-SP=${4:-1}
-MODEL_TYPE=${5:-llama}
+MODEL_TYPE=${4:-llama}
 
 export NCCL_DEBUG=VERSION
 export HETU_SWITCH_ALGORITHM=NEW_GREEDY
@@ -35,8 +34,8 @@ else
 fi
 
 TRAINER_CONFIG_PATH=trainer_config/example.json
-PROFILE_MEMORY_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
-PROFILE_PATH=exp_result/profile/cost_model/profile_time_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+PROFILE_MEMORY_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
+PROFILE_PATH=exp_result/profile/cost_model/profile_time_${MODEL_TYPE}_${MODEL_SIZE}.csv
 VALIDATION_PATH=exp_result/profile/cost_model/validation_time_${MODEL_TYPE}_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
 
 IFS=',' read -r -a tps <<< "$TPS"
@@ -65,7 +64,7 @@ for i in $(seq 0 $(( ${#tps[@]} - 1 ))); do
         --ffn_hidden_size $FFN_HIDDEN_SIZE \
         --num_attention_heads $NUM_HEADS \
         --tp $TP \
-        --sp $SP \
+        --sp 1 \
         --train_task_num $TRAIN_TASK_NUM \
         --num_layers $NUM_LAYERS \
         --model_type $MODEL_TYPE \
@@ -90,7 +89,7 @@ for i in $(seq 0 $(( ${#tps[@]} - 1 ))); do
         --ffn_hidden_size $FFN_HIDDEN_SIZE \
         --num_attention_heads $NUM_HEADS \
         --tp $TP \
-        --sp $SP \
+        --sp 1 \
         --train_task_num $TRAIN_TASK_NUM \
         --num_layers $NUM_LAYERS \
         --model_type $MODEL_TYPE \

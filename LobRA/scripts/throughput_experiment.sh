@@ -21,8 +21,8 @@ fi
 export LORA_SPLIT_METHOD=OURS
 
 TRAINER_CONFIG_PATH=trainer_config/example.json
-MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
-SAVE_PATH=exp_result/throughput/throughput_per_gpu_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+MEMORY_PROFILE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
+SAVE_PATH=exp_result/throughput/throughput_per_gpu_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
 RAW_PATH=$SAVE_PATH.raw
 SEQ_LEN_RANGE=(256 512 1024 2048 4096 8192 16384)
 NUM_MICRO_BATCHES=64

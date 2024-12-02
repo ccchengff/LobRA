@@ -25,7 +25,7 @@ else
 fi
 
 TRAINER_CONFIG_PATH=trainer_config/${TRAINER_CONFIG_PATH}.json
-SAVE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks_sp${SP}.csv
+SAVE_PATH=exp_result/profile/memory/max_tokens_llama_${MODEL_SIZE}_${TRAIN_TASK_NUM}tasks.csv
 
 python3 scripts/profile_memory.py \
     --trainer_config_path $TRAINER_CONFIG_PATH \

@@ -92,4 +92,4 @@ bash experiments/expr_32b.sh
 bash experiments/expr_70b.sh
 ~~~
 
-Note that you need to profile the memory and time cost of different parallel configurations before running the experiments. The profiling results will be stored in `exp_result/profile/memory/` and `exp_result/profile/cost_model/`, respectively.
+Note that you need to profile the memory and time cost of different parallel configurations before running the experiments. The profiling results will be stored in `exp_result/profile/memory/` and `exp_result/profile/cost_model/`, respectively. We provide our profiling results of Llama2-7B on 16 A100-40GB GPUs in both of the directories for your reference.
